@@ -33,6 +33,7 @@ parser.add_argument('-l', '--log', action='store_true', default=False, help='Ena
 parser.add_argument('-m', '--match', action='store_true', default=False, help='Enable scan and match')
 parser.add_argument('-d', '--dry-run', action='store_true', default=False, help='Output list of songs that would be uploaded')
 parser.add_argument('-q', '--quiet', action='store_true', default=False, help='Don\'t output status messages\n-l,--log will display gmusicapi warnings\n-d,--dry-run will display song list')
+parser.add_argument('-e', '--exclude', action='append', help='exclude files matching PATTERN', metavar="PATTERN")
 parser.add_argument('input', nargs='*', default='.', help='Files, directories, or glob patterns to upload\nDefaults to current directory if none given')
 opts = parser.parse_args()
 
@@ -40,6 +41,7 @@ MM = Musicmanager(debug_logging=opts.log)
 
 _print = print if not opts.quiet else lambda *a, **k: None
 
+excludere = re.compile("|".join(opts.exclude)) if opts.exclude else None
 
 def do_auth():
 	"""
@@ -137,6 +139,15 @@ def filter_tags(song):
 	# Need both tracknumber (mutagen) and track_number (Google Music) here.
 	return [song[tag] for tag in ['artist', 'album', 'title', 'tracknumber', 'track_number'] if song.get(tag)]
 
+def excludep(name):
+        """
+        Checks if we should exclude a particular file or directory
+        """
+        if excludere and excludere.search(name):
+                _print("Excluding {file}".format(file=name))
+                return True
+        else:
+                return False
 
 def get_file_list():
 	"""
@@ -148,15 +159,16 @@ def get_file_list():
 	for i in opts.input:
 		i = i.decode('utf8')
 
-		if os.path.isfile(i) and i.lower().endswith(formats):
+		if os.path.isfile(i) and i.lower().endswith(formats) and not(excludep(i)):
 			files.append(i)
 
-		if os.path.isdir(i):
+		if os.path.isdir(i) and not(excludep(i)):
 			for dirpath, dirnames, filenames in os.walk(i):
 				for filename in filenames:
 					if filename.lower().endswith(formats):
 						file = os.path.join(dirpath, filename)
-						files.append(file)
+						if not(excludep(file)):
+							files.append(file)
 
 	return files
 
